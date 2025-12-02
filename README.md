@@ -115,5 +115,60 @@
       4. **Authenticate** (только ALB) - ALB может выполнять аутентификацию перед передачей запроса: Cognito, OIDC (Google, GitHub).
    7. Нажмите `Create load balancer`.
 3. Перейдите в раздел `Resource map` и убедитесь что существуют связи между `Listeners`, `Rules` и `Target groups`.
+![alt text](image-17.png)
 
-жду овтета от авс
+### Шаг 7. Создание Auto Scaling Group
+
+1. В разделе EC2 выберите `Auto Scaling Groups` → `Create Auto Scaling group`.
+2. Укажите следующие параметры:
+
+   1. Название: `project-auto-scaling-group`
+   2. Launch template: выберите созданный ранее Launch Template (`project-launch-template`).
+   3. Перейдите в раздел `Choose instance launch options `.
+
+      - В разделе`Network`: выберите созданную VPC и две приватные подсети.
+      ![alt text](image-18.png)
+      > Почему для Auto Scaling Group выбираются приватные подсети?
+      - **ASG размещают в приватных подсетях**, чтобы backend-инстансы были скрыты от интернета, а трафик шёл только через Load Balancer
+   4. Availability Zone distribution: выберите `Balanced best effort`.
+
+      > Зачем нужна настройка: `Availability Zone distribution`?
+      - Это механизм, который гарантирует, что наши инстансы будут равномерно распределены по нескольким зонам доступности, чтобы обеспечить отказоустойчивость.
+
+   5. Перейдите в раздел `Integrate with other services` и выберите `Attach to an existing load balancer`, затем выберите созданную Target Group (`project-target-group`).
+      - Таким образом мы добавляем AutoScaling Group в Target Group нашего Load Balancer-а.
+   6. Перейдите в раздел `Configure group size and scaling` и укажите:
+
+      1. Минимальное количество инстансов: `2`
+      2. Максимальное количество инстансов: `4`
+      3. Желаемое количество инстансов: `2`
+      4. Укажите `Target tracking scaling policy` и настройте масштабирование по CPU (Average CPU utilization — `50%` / `Instance warm-up period` — `60 seconds`).
+      ![alt text](image-19.png)
+         > Что такое _Instance warm-up period_ и зачем он нужен?
+         - **Instance warm-up period** - это параметр в Auto Scaling Group, задающий время, которое новая EC2-инстанция считается разогревающейся после запуска, прежде чем её метрики начнут учитываться политиками масштабирования.
+
+      5. В разделе `Additional settings` поставьте галочку на `Enable group metrics collection within CloudWatch`, чтобы собирать метрики Auto Scaling Group в CloudWatch. _Этот пункт позволит нам отслеживать состояние группы и её производительность_.
+
+   7. Перейдите в раздел `Review` и нажмите `Create Auto Scaling group`.
+   ![alt text](image-20.png)
+
+### Шаг 8. Тестирование Application Load Balancer
+
+1. Перейдите в раздел EC2 -> `Load Balancers`, выберите созданный Load Balancer и скопируйте его DNS-имя.
+2. Вставьте DNS-имя в браузер и убедитесь, что вы видите страницу веб-сервера.
+3. Обновите страницу несколько раз и посмотрите на IP-адреса в ответах.
+![alt text](image-21.png)
+- Обновив страниуц несколько раз нас перенаправляет на втроой инстанс
+![alt text](image-22.png)
+### Шаг 9. Тестирование Auto Scaling
+
+1. Перейдите в CloudWatch -> `Alarms`, у вас должны быть созданы автоматические оповещения для Auto Scaling Group.
+2. Выберите одно из оповещений (например, `TargetTracking-XX-AlarmHigh-...`), откройте и посмотрите на график CPU Utilization. На данный момент график должен быть низким (около 0-1%).
+3. Перейдите в браузер и откройте 6-7 вкладок со следующим адресом:
+4. Вернитесь в CloudWatch и посмотрите на график CPU Utilization. Через несколько минут вы должны увидеть рост нагрузки.
+5. Подождите 2-3 минуты, пока CloudWatch не зафиксирует высокую нагрузку и не создаст `Alarm` (будет показано красным цветом).
+6. Перейдите в раздел `EC2` -> `Instances` и посмотрите на количество запущенных инстансов.
+![alt text](image-23.png)
+   
+   > Какую роль в этом процессе сыграл Auto Scaling?
+   - Auto Scaling в этом процессе выполняет центральную роль: он автоматически реагирует на рост нагрузки и масштабирует нашу инфраструктуру без нашего участия.
